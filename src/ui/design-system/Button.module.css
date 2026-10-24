@@ -1,0 +1,95 @@
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-width: var(--touch-min);
+  min-height: var(--touch-min);
+  padding: 0 var(--space-5);
+  border: none;
+  border-radius: var(--radius-full);
+  background: transparent;
+  color: var(--color-text);
+  font-size: var(--text-body);
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+  transition:
+    transform var(--motion-fast) var(--ease),
+    background-color var(--motion-base) var(--ease);
+}
+
+.button:active {
+  transform: scale(0.94);
+}
+
+.button:disabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.button svg {
+  flex-shrink: 0;
+  width: 1.4em;
+  height: 1.4em;
+}
+
+.primary {
+  background: var(--color-accent);
+  color: var(--color-accent-contrast);
+}
+
+.secondary {
+  background: var(--color-surface-raised);
+}
+
+.ghost:active {
+  background: var(--color-pressed);
+}
+
+.md {
+  min-height: var(--touch-min);
+}
+
+.lg {
+  min-height: var(--touch-lg);
+  font-size: var(--text-title);
+}
+
+.xl {
+  min-height: var(--touch-xl);
+  font-size: var(--text-title);
+}
+
+.iconOnly {
+  padding: 0;
+}
+
+.iconOnly.md {
+  width: var(--touch-min);
+  height: var(--touch-min);
+}
+
+.iconOnly.lg {
+  width: var(--touch-lg);
+  height: var(--touch-lg);
+}
+
+.iconOnly.xl {
+  width: var(--touch-xl);
+  height: var(--touch-xl);
+}
+
+.iconOnly.md svg {
+  width: 28px;
+  height: 28px;
+}
+
+.iconOnly.lg svg {
+  width: 34px;
+  height: 34px;
+}
+
+.iconOnly.xl svg {
+  width: 44px;
+  height: 44px;
+}
