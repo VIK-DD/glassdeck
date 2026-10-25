@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import type { DeckState } from '../core';
+import type { DeckState, HelperStatus, Integrations, ObsStatus } from '../core';
+import { Ambient } from '../ui/design-system/Ambient';
 import { AppTile } from '../ui/design-system/AppTile';
 import { Button } from '../ui/design-system/Button';
 import { Card } from '../ui/design-system/Card';
@@ -17,12 +18,16 @@ export function ConfigApp() {
 
   return (
     <div className={styles.window} data-appearance={appearance}>
-      <NavigationBar title="Deck" />
+      <Ambient />
+      <NavigationBar title="Glassdeck" />
       {state && (
         <div className={styles.columns}>
-          <PhonePanel state={state} />
+          <div className={styles.sideColumn}>
+            <PhonePanel state={state} />
+            <IntegrationsPanel integrations={state.integrations} />
+          </div>
           <Card
-            title="Buttons"
+            title="Apps"
             action={
               <Button variant="primary" icon="plus" onClick={() => deck.addApps()}>
                 Add apps
@@ -31,7 +36,7 @@ export function ConfigApp() {
           >
             {state.buttons.length === 0 ? (
               <p className={styles.empty}>
-                No buttons yet. Add programs, Start menu shortcuts or Steam games, and they appear on the phone.
+                No apps yet. Add programs, Start menu shortcuts or Steam games, and they appear on the phone.
               </p>
             ) : (
               <div className={styles.buttonsLayout}>
@@ -84,13 +89,45 @@ function PhonePanel({ state }: { state: DeckState }) {
       <p className={cx(styles.pin, 'selectable')} aria-label={`PIN ${state.pin.split('').join(' ')}`}>
         {state.pin}
       </p>
-      <p className={styles.status}>
-        <span className={cx(styles.statusDot, phones > 0 && styles.statusDotOn)} />
+      <StatusLine on={phones > 0}>
         {phones === 0 ? 'No phone connected' : phones === 1 ? '1 phone connected' : `${phones} phones connected`}
-      </p>
+      </StatusLine>
       <div className={styles.spacer} />
       <Button onClick={() => deck.resetPairing()}>Reset pairing</Button>
       <p className={styles.footnote}>Disconnects every phone. Each one will need the new PIN.</p>
     </Card>
+  );
+}
+
+const HELPER_TEXT: Record<HelperStatus, string> = {
+  running: 'Media and audio control ready',
+  starting: 'Starting media and audio control…',
+  unavailable: 'Media and audio control unavailable (build it with npm run helper:build)',
+};
+
+const OBS_TEXT: Record<ObsStatus, string> = {
+  connected: 'OBS connected',
+  offline: 'OBS isn’t running',
+  disabled: 'In OBS, turn on Tools → WebSocket Server Settings',
+};
+
+function IntegrationsPanel({ integrations }: { integrations: Integrations }) {
+  return (
+    <Card title="Integrations">
+      <div className={styles.integrations}>
+        <StatusLine on={integrations.helper === 'running'}>{HELPER_TEXT[integrations.helper]}</StatusLine>
+        <StatusLine on={integrations.obs === 'connected'}>{OBS_TEXT[integrations.obs]}</StatusLine>
+        <StatusLine on={integrations.gpu !== null}>{integrations.gpu ?? 'No NVIDIA GPU detected'}</StatusLine>
+      </div>
+    </Card>
+  );
+}
+
+function StatusLine({ on, children }: { on: boolean; children: string }) {
+  return (
+    <p className={styles.status}>
+      <span className={cx(styles.statusDot, on && styles.statusDotOn)} />
+      {children}
+    </p>
   );
 }

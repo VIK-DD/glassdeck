@@ -1,17 +1,35 @@
+/* No background: the Ambient wallpaper shows through the glass cards. */
 .window {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   height: 100vh;
-  background: var(--color-bg);
   color: var(--color-text);
 }
 
 .columns {
   display: grid;
-  grid-template-columns: 320px minmax(0, 1fr);
+  grid-template-columns: 330px minmax(0, 1fr);
   gap: var(--space-4);
   min-height: 0;
   padding: 0 var(--space-5) var(--space-5);
+}
+
+.sideColumn {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-height: 0;
+}
+
+.sideColumn > :first-child {
+  flex: 1;
+}
+
+.integrations {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  font-size: var(--text-footnote);
 }
 
 /* Phone panel */
@@ -54,6 +72,7 @@
 }
 
 .statusDot {
+  flex-shrink: 0;
   width: 10px;
   height: 10px;
   border-radius: 50%;
@@ -62,6 +81,7 @@
 
 .statusDotOn {
   background: var(--color-success);
+  box-shadow: 0 0 8px var(--color-success);
 }
 
 .footnote {

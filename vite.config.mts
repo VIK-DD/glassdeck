@@ -2,7 +2,7 @@ import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 
 // Must match DECK_PORT in electron/deckServer.ts.
-const DECK_SERVER = 'http://localhost:4455';
+const DECK_SERVER = 'http://localhost:4460';
 
 export default defineConfig({
   // Relative asset paths: the phone page is served by the deck server, the config page over file://.
