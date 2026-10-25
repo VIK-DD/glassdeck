@@ -14,16 +14,16 @@
   font-weight: var(--weight-semibold);
   cursor: pointer;
   transition:
-    transform var(--motion-fast) var(--ease),
+    transform var(--motion-fast) var(--ease-spring),
     background-color var(--motion-base) var(--ease);
 }
 
 .button:active {
-  transform: scale(0.94);
+  transform: scale(0.93);
 }
 
 .button:disabled {
-  opacity: 0.4;
+  opacity: 0.38;
   pointer-events: none;
 }
 
@@ -33,17 +33,25 @@
   height: 1.4em;
 }
 
+/* Tinted glass: the accent colour shows through the material. */
 .primary {
-  background: var(--color-accent);
+  composes: glass from './Glass.module.css';
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, var(--color-accent) 82%, transparent);
   color: var(--color-accent-contrast);
 }
 
 .secondary {
-  background: var(--color-surface-raised);
+  composes: glass from './Glass.module.css';
+  border-radius: var(--radius-full);
+}
+
+.secondary:active {
+  background: var(--glass-fill-pressed);
 }
 
 .ghost:active {
-  background: var(--color-pressed);
+  background: var(--glass-fill);
 }
 
 .md {
@@ -80,16 +88,16 @@
 }
 
 .iconOnly.md svg {
-  width: 28px;
-  height: 28px;
+  width: 24px;
+  height: 24px;
 }
 
 .iconOnly.lg svg {
-  width: 34px;
-  height: 34px;
+  width: 32px;
+  height: 32px;
 }
 
 .iconOnly.xl svg {
-  width: 44px;
-  height: 44px;
+  width: 42px;
+  height: 42px;
 }

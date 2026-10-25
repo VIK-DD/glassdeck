@@ -1,26 +1,24 @@
 .card {
+  composes: glass from './Glass.module.css';
   display: flex;
   flex-direction: column;
   min-width: 0;
   min-height: 0;
-  overflow: hidden;
-  border-radius: var(--radius-lg);
-  background: var(--color-surface);
-  transition: background-color var(--motion-theme) var(--ease);
 }
 
 .header {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: var(--space-3);
   padding: var(--space-4) var(--space-5) 0;
 }
 
 .title {
   margin: 0;
-  color: var(--color-text-secondary);
-  font-size: var(--text-footnote);
-  font-weight: var(--weight-semibold);
+  color: var(--color-text);
+  font-size: var(--text-title);
+  font-weight: var(--weight-bold);
 }
 
 .body {

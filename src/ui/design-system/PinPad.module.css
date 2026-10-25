@@ -21,14 +21,15 @@
 }
 
 .key {
-  background: var(--color-surface-raised);
+  composes: glass from './Glass.module.css';
+  border-radius: 50%;
   font-size: 30px;
   font-weight: var(--weight-medium);
 }
 
 .key:active {
   transform: scale(0.92);
-  background: var(--color-track);
+  background: var(--glass-fill-pressed);
 }
 
 .deleteKey {

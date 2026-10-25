@@ -1,0 +1,57 @@
+.gauge {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  max-width: 120px;
+  aspect-ratio: 1;
+  container-type: inline-size;
+}
+
+.svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.track,
+.value {
+  fill: none;
+  stroke-width: 9;
+  stroke-linecap: round;
+}
+
+.track {
+  stroke: var(--color-track);
+}
+
+.value {
+  stroke: var(--color-accent);
+  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--color-accent) 60%, transparent));
+  transition:
+    stroke-dasharray 600ms var(--ease),
+    stroke var(--motion-base) var(--ease);
+}
+
+.warning .value {
+  stroke: var(--color-warning);
+}
+
+.critical .value {
+  stroke: var(--color-critical);
+}
+
+.readout {
+  font-size: 26cqi;
+  font-weight: var(--weight-bold);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+.unit {
+  margin-left: 1px;
+  color: var(--color-text-secondary);
+  font-size: 0.5em;
+  font-weight: var(--weight-semibold);
+}

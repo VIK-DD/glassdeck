@@ -10,6 +10,10 @@ body,
   height: 100%;
   margin: 0;
   overflow: hidden;
+}
+
+/* Only the canvas is opaque: body and #root stay transparent so the Ambient backdrop (z-index -1) shows. */
+html {
   background: #000;
 }
 
