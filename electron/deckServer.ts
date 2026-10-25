@@ -1,13 +1,27 @@
-// LAN server the phone talks to: serves the phone web app, pairs phones with the PIN,
-// streams the button list (Server-Sent Events) and launches buttons by id.
-// The phone can only refer to buttons by id, so it can never make the PC open anything else.
+// LAN server the phone talks to: serves the phone web app, pairs phones with the PIN, streams live
+// state (Server-Sent Events) and accepts a fixed set of validated commands.
+// The phone refers to buttons, apps and devices by id only, so it can never make the PC run anything else.
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { extname, resolve, sep } from 'node:path';
 import { isRecord, type PublicDeckButton } from '../src/core/deck';
+import {
+  isAudioTarget,
+  isDeviceId,
+  isMediaAction,
+  isVolume,
+  type AudioInfo,
+  type AudioTarget,
+  type MediaAction,
+  type MediaInfo,
+  type ObsInfo,
+  type SystemInfo,
+} from '../src/core/pc';
+import type { ClipResult } from './pc/obsClient';
 import type { PinCheck } from './pinGuard';
 
-export const DECK_PORT = 4455;
+/** Not 4455: that is OBS WebSocket's default port. */
+export const DECK_PORT = 4460;
 
 const COOKIE_NAME = 'deck_token';
 const COOKIE_MAX_AGE_SEC = 365 * 24 * 60 * 60;
@@ -30,14 +44,35 @@ const CONTENT_TYPES: Record<string, string> = {
 
 export type LaunchResult = 'ok' | 'not-found' | 'failed';
 
+/** Live PC state, as sent to phones. */
+export interface PcState {
+  media: MediaInfo | null;
+  audio: AudioInfo | null;
+  system: SystemInfo | null;
+  obs: ObsInfo;
+}
+
+export type StreamEvent = 'buttons' | keyof PcState;
+
+/** Commands from the phone, already validated. Each returns false when it can't be carried out right now. */
+export interface PcControl {
+  media(action: MediaAction): boolean;
+  setVolume(target: AudioTarget, volume: number): boolean;
+  setMute(target: AudioTarget, muted: boolean): boolean;
+  setOutput(deviceId: string): boolean;
+  saveClip(): Promise<ClipResult>;
+}
+
 export interface DeckServerDeps {
   /** Folder with the built web app (phone.html + assets/). */
   staticDir: string;
   getButtons(): PublicDeckButton[];
+  getPcState(): PcState;
   getToken(): string;
   isValidToken(token: string): boolean;
   checkPin(pin: string): PinCheck;
   launch(id: string): Promise<LaunchResult>;
+  control: PcControl;
   onClientsChanged?(count: number): void;
 }
 
@@ -82,13 +117,41 @@ export function createDeckServer(deps: DeckServerDeps) {
     if (!isAuthorized(req)) return send(res, 401);
     if (req.method === 'GET' && path === '/api/session') return send(res, 204);
     if (req.method === 'GET' && path === '/api/events') return openEventStream(req, res);
+    if (req.method !== 'POST') return send(res, 404);
 
     const launchMatch = /^\/api\/launch\/([^/]+)$/.exec(path);
-    if (req.method === 'POST' && launchMatch) {
+    if (launchMatch) {
       const result = await deps.launch(decodeURIComponent(launchMatch[1]));
       return send(res, result === 'ok' ? 204 : result === 'not-found' ? 404 : 500);
     }
-    return send(res, 404);
+
+    const mediaMatch = /^\/api\/media\/([a-z]+)$/.exec(path);
+    if (mediaMatch) {
+      if (!isMediaAction(mediaMatch[1])) return send(res, 404);
+      return sendDone(res, deps.control.media(mediaMatch[1]));
+    }
+
+    if (path === '/api/obs/clip') {
+      const result = await deps.control.saveClip();
+      return result === 'unavailable' ? send(res, 409) : sendJson(res, 200, { result });
+    }
+
+    const body = await readJson(req);
+    if (body === TOO_LARGE) return send(res, 413);
+    if (!isRecord(body)) return send(res, 400);
+    switch (path) {
+      case '/api/audio/volume':
+        if (!isAudioTarget(body.target) || !isVolume(body.volume)) return send(res, 400);
+        return sendDone(res, deps.control.setVolume(body.target, body.volume));
+      case '/api/audio/mute':
+        if (!isAudioTarget(body.target) || typeof body.muted !== 'boolean') return send(res, 400);
+        return sendDone(res, deps.control.setMute(body.target, body.muted));
+      case '/api/audio/output':
+        if (!isDeviceId(body.deviceId)) return send(res, 400);
+        return sendDone(res, deps.control.setOutput(body.deviceId));
+      default:
+        return send(res, 404);
+    }
   }
 
   /** Blocks cross-site requests: browsers can't add the custom header cross-origin without a preflight we never allow. */
@@ -110,17 +173,15 @@ export function createDeckServer(deps: DeckServerDeps) {
 
   function openEventStream(req: IncomingMessage, res: ServerResponse) {
     res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' });
-    res.write(buttonsEvent());
+    res.write(formatEvent('buttons', deps.getButtons()));
+    const pc = deps.getPcState();
+    (Object.keys(pc) as (keyof PcState)[]).forEach((key) => res.write(formatEvent(key, pc[key])));
     clients.add(res);
     deps.onClientsChanged?.(clients.size);
     req.on('close', () => {
       clients.delete(res);
       deps.onClientsChanged?.(clients.size);
     });
-  }
-
-  function buttonsEvent(): string {
-    return `event: buttons\ndata: ${JSON.stringify(deps.getButtons())}\n\n`;
   }
 
   async function serveStatic(res: ServerResponse, path: string) {
@@ -167,9 +228,9 @@ export function createDeckServer(deps: DeckServerDeps) {
       server.closeAllConnections();
       return new Promise((resolveStop) => server.close(() => resolveStop()));
     },
-    broadcastButtons() {
-      const event = buttonsEvent();
-      clients.forEach((client) => client.write(event));
+    broadcast(event: StreamEvent, data: unknown) {
+      const message = formatEvent(event, data);
+      clients.forEach((client) => client.write(message));
     },
     /** Drops every live phone connection, e.g. after the pairing token changed. */
     disconnectAll() {
@@ -181,9 +242,18 @@ export function createDeckServer(deps: DeckServerDeps) {
   };
 }
 
+function formatEvent(event: StreamEvent, data: unknown): string {
+  return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+}
+
 function send(res: ServerResponse, status: number) {
   res.writeHead(status);
   res.end();
+}
+
+/** 204 when the command was handed to Windows, 409 when it can't run right now (e.g. helper unavailable). */
+function sendDone(res: ServerResponse, done: boolean) {
+  send(res, done ? 204 : 409);
 }
 
 function sendJson(res: ServerResponse, status: number, body: unknown) {

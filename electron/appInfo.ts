@@ -11,7 +11,8 @@ export async function describeApp(filePath: string): Promise<NewButton> {
   return { title: titleFromPath(filePath), target: filePath, icon: await readIcon(filePath) };
 }
 
-async function readIcon(filePath: string): Promise<string | null> {
+/** The file's Windows icon as a PNG data URL (for .lnk files, the icon of the shortcut's target). */
+export async function readIcon(filePath: string): Promise<string | null> {
   let source = filePath;
   // A shortcut's own icon carries the arrow overlay; read the icon of what it points to instead.
   if (extname(filePath).toLowerCase() === '.lnk') {
