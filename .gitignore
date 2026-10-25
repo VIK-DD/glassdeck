@@ -1,4 +1,7 @@
 node_modules/
 dist/
 dist-electron/
+dist-helper/
+helper/bin/
+helper/obj/
 .claude/

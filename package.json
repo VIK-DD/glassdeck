@@ -10,9 +10,10 @@
   "scripts": {
     "dev": "vite",
     "electron:compile": "tsc -p tsconfig.electron.json",
+    "helper:build": "dotnet publish helper/Glassdeck.Helper.csproj -c Release -o dist-helper --nologo",
     "desktop:dev": "npm run electron:compile && electron . --dev",
     "desktop": "npm run build && electron .",
-    "build": "tsc && npm run electron:compile && vite build",
+    "build": "tsc && npm run electron:compile && npm run helper:build && vite build",
     "typecheck": "tsc",
     "test": "vitest run"
   },
