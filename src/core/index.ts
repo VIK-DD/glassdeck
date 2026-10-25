@@ -2,5 +2,6 @@
 export * from './deck';
 export * from './deckApi';
 export * from './deckClientState';
+export * from './pc';
 export * from './store/createStore';
 export * from './util/math';

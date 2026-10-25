@@ -1,5 +1,17 @@
 // Contract between the Electron host and the PC config window (exposed to the page by electron/preload.ts).
 import type { DeckButton, DeckTint } from './deck';
+import type { ObsStatus } from './pc';
+
+/** running: helper process is up · unavailable: not built, crashed repeatedly, or not on Windows. */
+export type HelperStatus = 'starting' | 'running' | 'unavailable';
+
+export interface Integrations {
+  /** Media + audio control (Windows helper process). */
+  helper: HelperStatus;
+  obs: ObsStatus;
+  /** GPU name when one is being monitored. */
+  gpu: string | null;
+}
 
 export interface DeckState {
   buttons: DeckButton[];
@@ -8,6 +20,7 @@ export interface DeckState {
   /** Addresses the phone can open, one per network adapter. */
   phoneUrls: string[];
   connectedPhones: number;
+  integrations: Integrations;
 }
 
 export interface ButtonEdit {
