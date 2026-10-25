@@ -34,9 +34,9 @@ export function PairingScreen() {
 
   return (
     <div className={styles.pairing}>
-      <div className={styles.pairingText}>
+      <div className={styles.pairingCard}>
         <h1 className={styles.pairingTitle}>Connect to your PC</h1>
-        <p className={styles.pairingBody}>Enter the PIN shown in the Deck app on your PC.</p>
+        <p className={styles.pairingBody}>Enter the PIN shown in the Glassdeck window on your PC.</p>
         <div className={styles.pinDots} role="status" aria-label={`${pin.length} of ${PIN_LENGTH} digits entered`}>
           {Array.from({ length: PIN_LENGTH }, (_, i) => (
             <span key={i} className={cx(styles.pinDot, i < pin.length && styles.pinDotFilled)} />

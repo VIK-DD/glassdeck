@@ -1,104 +1,42 @@
 .app {
+  position: relative;
   height: 100%;
-  background: var(--color-bg);
   color: var(--color-text);
 }
 
-/* Home screen */
-
-.deck {
+.shell {
   display: grid;
-  grid-template-columns: var(--dock-width) minmax(0, 1fr);
+  grid-template-columns: var(--rail-width) minmax(0, 1fr);
+  gap: var(--space-3);
   height: 100%;
-}
-
-.home {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  min-height: 0;
-  padding: var(--space-3) var(--space-3) 0;
-  background: var(--wallpaper);
-}
-
-.pages {
-  display: flex;
-  flex: 1;
-  min-height: 0;
-  overflow-x: auto;
-  overflow-y: hidden;
-  scroll-snap-type: x mandatory;
-  scrollbar-width: none;
-}
-
-.pages::-webkit-scrollbar {
-  display: none;
+  padding: var(--space-3);
 }
 
 .page {
-  display: grid;
-  flex: 0 0 100%;
-  place-items: center;
-  scroll-snap-align: start;
-}
-
-.empty {
-  max-width: 360px;
-  margin: auto;
-  color: var(--color-text-secondary);
-  font-size: var(--text-body);
-  text-align: center;
-}
-
-.dots {
-  display: flex;
-  justify-content: center;
-  height: 28px;
-}
-
-.dot {
-  display: grid;
-  place-items: center;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  border: none;
-  background: transparent;
-  cursor: pointer;
-}
-
-.dot::before {
-  content: '';
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--color-track);
-}
-
-.dotActive::before {
-  background: var(--color-text);
+  position: relative;
+  min-width: 0;
+  min-height: 0;
 }
 
 .banner {
+  composes: glass from '../ui/design-system/Glass.module.css';
   position: absolute;
-  top: var(--space-3);
+  top: var(--space-2);
   left: 50%;
-  z-index: 1;
+  z-index: 2;
   padding: var(--space-2) var(--space-4);
   border-radius: var(--radius-full);
-  background: var(--color-overlay);
-  box-shadow: var(--shadow-overlay);
+  background: var(--glass-fill-strong);
   font-size: var(--text-footnote);
   font-weight: var(--weight-semibold);
   transform: translateX(-50%);
   white-space: nowrap;
 }
 
-/* Sidebar */
+/* ——— Rail contents ——— */
 
 .time {
-  font-size: 20px;
+  font-size: 19px;
   font-weight: var(--weight-semibold);
   font-variant-numeric: tabular-nums;
 }
@@ -106,38 +44,43 @@
 .connection {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   color: var(--color-text-secondary);
   font-size: var(--text-caption);
   font-weight: var(--weight-semibold);
 }
 
 .connectionDot {
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
   background: var(--color-critical);
 }
 
 .connectionOnline .connectionDot {
   background: var(--color-success);
+  box-shadow: 0 0 8px var(--color-success);
 }
 
-.sideButton {
+.railButton {
   display: grid;
   place-items: center;
-  width: 56px;
-  height: 56px;
+  width: 52px;
+  height: 52px;
+  padding: 0;
+  border: none;
   border-radius: 50%;
-  background: var(--color-surface-raised);
+  background: var(--glass-fill);
+  color: var(--color-text-secondary);
+  cursor: pointer;
 }
 
-.sideButton svg {
-  width: 26px;
-  height: 26px;
+.railButton svg {
+  width: 22px;
+  height: 22px;
 }
 
-/* Pairing */
+/* ——— Pairing ——— */
 
 .pairing {
   display: grid;
@@ -146,17 +89,19 @@
   gap: var(--space-6);
   height: 100%;
   padding: var(--space-4) var(--space-7);
-  background: var(--wallpaper);
 }
 
-.pairingText {
+.pairingCard {
+  composes: glass from '../ui/design-system/Glass.module.css';
   min-width: 0;
+  padding: var(--space-6);
 }
 
 .pairingTitle {
   margin: 0;
   font-size: var(--text-large-title);
   font-weight: var(--weight-bold);
+  letter-spacing: -0.02em;
   line-height: 1.15;
 }
 
@@ -177,6 +122,7 @@
   height: 14px;
   border: 2px solid var(--color-text);
   border-radius: 50%;
+  transition: background-color var(--motion-fast) var(--ease);
 }
 
 .pinDotFilled {

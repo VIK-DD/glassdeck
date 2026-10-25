@@ -12,6 +12,18 @@ export function useClock(): string {
   return time;
 }
 
+/** Current time, re-rendering every `intervalMs` while `enabled` (e.g. only while music plays). */
+export function useNow(intervalMs: number, enabled: boolean): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    setNow(Date.now());
+    if (!enabled) return;
+    const timer = setInterval(() => setNow(Date.now()), intervalMs);
+    return () => clearInterval(timer);
+  }, [intervalMs, enabled]);
+  return now;
+}
+
 /** Tracks an element's content size. Returns a callback ref, the size and the element itself. */
 export function useElementSize<T extends HTMLElement>() {
   const [element, setElement] = useState<T | null>(null);
