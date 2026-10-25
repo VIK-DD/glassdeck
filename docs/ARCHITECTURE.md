@@ -1,100 +1,139 @@
-# Deck — Architecture
+# Glassdeck — Architecture
 
-A Stream Deck / MX Keypad-style launcher in the look of Apple CarPlay. An old Android phone (Chrome) shows
-a CarPlay home screen of app buttons; tapping one opens that app on the Windows PC. The PC runs an
-Electron app that holds the button list, serves the phone page on the local network and launches apps.
+A touch control center for a Windows PC, shown on an old Android phone in iOS 26's Liquid Glass style.
+The phone runs a web page in Chrome; the PC runs an Electron app that serves that page on the local
+network, holds the configuration and talks to Windows, OBS and the GPU driver.
 
 ## Using it
 
 ```
 npm install
-npm run desktop        # build everything and start the Deck app on the PC
+npm run desktop        # build everything (web, Electron host, Windows helper) and start Glassdeck
 ```
 
-1. In the Deck window, click **Add apps** and pick programs (.exe), Start-menu shortcuts (.lnk) or
-   Steam games (.url). The picker opens in the Start menu folder.
-2. On the phone (same Wi-Fi), open Chrome at the address shown in the Deck window, e.g. `http://192.168.1.23:4455`.
-3. Enter the 6-digit PIN shown on the PC. The phone stays paired (cookie) until you press **Reset pairing**.
-4. Tap the full-screen button in the phone's sidebar to hide Chrome's address bar.
-
-Practical notes:
-- The first start asks Windows Firewall for network access; allow it on private networks.
-- Android can't keep the screen on for a plain web page over http. Set a long screen timeout, or turn on
-  "Stay awake while charging" in Developer options.
+Building needs Node.js 20+ and the .NET 10 SDK. See the README for pairing a phone and enabling OBS.
 
 Development:
 
 ```
 npm run dev            # Vite: phone page at http://<pc-ip>:5173/phone.html, config page at /config.html
 npm run desktop:dev    # Electron using the Vite dev server (run `npm run dev` first)
-npm test               # core, server, store and PIN tests
+npm run helper:build   # dotnet publish helper/ → dist-helper/glassdeck-helper.exe
+npm test               # Vitest
 npm run typecheck
 ```
 
 ## Structure
 
 ```
-electron/                 PC host (Node / Electron), compiled to dist-electron/ by tsconfig.electron.json
-  main.ts                 Lifecycle, config window, IPC handlers (all arguments validated).
-  preload.ts              Exposes the DeckApi to the config window (sandboxed, contextIsolation on).
-  deckServer.ts           LAN HTTP server: phone page, pairing, button stream (SSE), launch by id.
-  deckStore.ts            Buttons + pairing token in %APPDATA%/<app>/deck.json (atomic writes, corrupt-file backup).
-  pinGuard.ts             One-time 6-digit PIN, rotates after use and after 5 wrong guesses.
-  appInfo.ts              Reads an app's name and icon (resolves .lnk targets), opens targets via the shell.
+electron/                   PC host (Node / Electron), compiled to dist-electron/ by tsconfig.electron.json
+  main.ts                   Lifecycle, wiring of integrations to the server, config window, validated IPC,
+                            one-time migration of the pre-rename config (%APPDATA%/carplay-windows).
+  preload.ts                Exposes the DeckApi to the config window (sandboxed, contextIsolation on).
+  deckServer.ts             LAN server on port 4460: phone page, pairing, SSE stream, validated commands.
+  deckStore.ts              Buttons + pairing token in %APPDATA%/glassdeck/deck.json (atomic writes, corrupt-file backup).
+  pinGuard.ts               One-time 6-digit PIN, rotates after use and after 5 wrong guesses.
+  appInfo.ts                App names and icons (resolves .lnk targets); opens targets via the shell.
+  pc/winHelper.ts           Runs the C# helper, parses its JSON-lines events, restarts it if it exits.
+  pc/systemMonitor.ts       CPU (os.cpus deltas), memory, GPU via `nvidia-smi -lms 1000`.
+  pc/obsClient.ts           obs-websocket v5 client: auth, replay buffer / record / stream state, clips.
+helper/                     glassdeck-helper (C#, .NET 10, Windows only)
+  Program.cs                stdio loop: polls audio (300 ms) and media (1 s), emits only changes, runs commands.
+  MediaController.cs        Global System Media Transport Controls: now playing, cover, play/pause/skip.
+  AudioController.cs        Core Audio: endpoint volume/mute, per-app sessions, default output (IPolicyConfig).
+  CoreAudio.cs              COM interop definitions (IIDs cross-checked against NAudio and EarTrumpet).
 src/
-  core/                   Shared, platform-free TypeScript (no React, DOM, Node or Electron — enforced by a test).
-    deck.ts               Button model, validation of stored and received data, pagination, reordering.
-    deckApi.ts            Contract between the Electron host and the config window.
-    deckClientState.ts    Phone state reducer: connection, buttons, pairing, launch feedback, recents.
-    store/createStore.ts  Observable store used by the phone.
-  phone/                  Phone web app (served by deckServer).
-    deckClient.ts         fetch + EventSource transport feeding the reducer; reconnects automatically.
-    PairingScreen.tsx     PIN entry with an on-screen keypad.
-    DeckScreen.tsx        CarPlay home screen: sidebar (clock, connection, recents, full screen) + paged grid.
-  config/                 PC config window (Electron renderer).
-    ConfigApp.tsx         Phone panel (address, PIN, connected phones) + buttons panel.
-    ButtonEditor.tsx      Rename, recolour, reorder, remove.
-  ui/design-system/       Pure components + tokens, shared by both pages.
-phone.html, config.html   Vite entry pages.
-tests/                    core/, electron/ and the architecture test.
+  core/                     Shared, platform-free TypeScript (no React, DOM, Node or Electron — enforced by a test).
+    deck.ts                 Button model, validation, pagination, reordering.
+    pc.ts                   Media / audio / system / OBS models, their validators, playback-position extrapolation.
+    deckApi.ts              Contract between the Electron host and the config window.
+    deckClientState.ts      Phone state reducer: connection, pairing, launch feedback, PC state, chart history.
+    store/createStore.ts    Observable store used by the phone.
+  phone/                    Phone web app (served by deckServer).
+    deckClient.ts           fetch + EventSource transport; throttles volume drags to one request per 80 ms.
+    PhoneApp.tsx            Ambient backdrop, glass rail navigation, page switching.
+    pages/NowPage.tsx       Now playing, mic toggle, clip toggle, CPU/GPU glance.
+    pages/MixerPage.tsx     Output picker and a vertical slider per sound source.
+    pages/SystemPage.tsx    Load rings, one-minute charts, memory meters.
+    pages/AppsPage.tsx      Paged grid of app buttons.
+    PairingScreen.tsx       PIN entry with a glass keypad.
+  config/                   PC config window (Electron renderer): phone panel, integrations, app editor.
+  ui/design-system/         Liquid Glass components + tokens, shared by both pages.
+tests/                      core/, electron/ and the architecture test.
 ```
 
-## How a tap becomes an app on the PC
+## Data flow
 
-1. The phone's grid calls `launch(id)`; the reducer marks the button `launching` (icon pulses) and adds it to recents.
-2. `POST /api/launch/<id>` with the pairing cookie and the `X-Deck-Client` header.
-3. The server looks the id up in the stored config and opens that button's target with `shell.openPath`.
-4. 204 → green check badge; error → red badge and a shake. The badge clears after 1.5 s.
+**PC → phone.** Each source pushes into the host, which broadcasts a Server-Sent Event to every paired phone:
 
-Button changes on the PC are pushed to every phone over `GET /api/events` (Server-Sent Events), so the
-phone updates instantly. If the stream drops, the phone shows "Reconnecting…", re-checks its session every
-3 s and returns to the PIN screen if the pairing was reset.
+| Event     | Source                                  | When                               |
+|-----------|-----------------------------------------|------------------------------------|
+| `buttons` | deckStore                               | buttons added, edited, reordered   |
+| `media`   | helper (media session)                  | track, play state or position jump |
+| `audio`   | helper (Core Audio) + host icon lookup  | any volume, mute, app or device change |
+| `system`  | systemMonitor                           | every second                       |
+| `obs`     | obsClient                               | connection or output state change  |
+
+A phone that connects gets the current value of every event first. Media positions are extrapolated:
+the helper stamps each sample with the PC time, the host advances it when sending, and the phone
+advances it from the moment it arrived, so the progress bar moves without a stream of updates.
+
+**Phone → PC.** Every command is a POST with the pairing cookie and the `X-Deck-Client` header:
+
+| Endpoint                       | Body                          | Effect                           |
+|--------------------------------|-------------------------------|----------------------------------|
+| `/api/launch/<buttonId>`       | –                             | open a configured app            |
+| `/api/media/<toggle\|next\|previous>` | –                      | media keys for the current player |
+| `/api/audio/volume`            | `{ target, volume }`          | set a volume (0–1)               |
+| `/api/audio/mute`              | `{ target, muted }`           | mute / unmute                    |
+| `/api/audio/output`            | `{ deviceId }`                | make an output the default       |
+| `/api/obs/clip`                | –                             | save the replay buffer, or arm it |
+
+`target` is `master`, `mic`, `system` or `pid:<n>`. Responses: 204 done, 400 invalid, 401 not paired,
+404 unknown, 409 not possible right now (e.g. helper not running).
+
+The helper polls instead of registering COM callbacks: simpler threading, and it only emits when the
+serialised state actually changed. After any command it re-polls immediately so the phone sees the
+effect within a frame or two.
 
 ## Security model
 
-The phone can make the PC open programs, so the server is the trust boundary:
+The phone can change things on the PC, so the server is the trust boundary:
 
-- **Launch by id only.** The phone never sends paths or commands; it can open only what you added. Targets are never sent to the phone.
-- **Pairing.** A one-time 6-digit PIN (rotates after use, and after 5 wrong guesses) exchanges for a 256-bit
-  token stored in an `HttpOnly; SameSite=Strict` cookie. Token comparisons are constant-time. **Reset pairing** issues a new token and drops all connections.
-- **Cross-site requests.** POSTs need the `X-Deck-Client` header (which forces a CORS preflight the server never allows)
-  and a matching `Origin` when present. Bodies are capped at 1 KB.
-- **Static files.** Only files inside the built web folder, with known types, are served. The config page is not served on the network. The phone page gets a strict Content-Security-Policy.
-- **Data from the network or disk is validated** (`parseDeckConfig`, `parsePublicButtons`): ids, titles, tints, and icons (PNG data URLs only).
-- **Electron.** Sandboxed renderer, context isolation, no Node in the page, navigation and popups blocked, IPC only from the config window with validated arguments.
+- **Fixed vocabulary.** The phone sends ids and numbers, never paths or commands. Button targets, executable
+  paths and device ids from Windows never need to be trusted from the network: targets stay on the PC,
+  app ids are validated against `pid:<n>`, output ids must match a device the helper reported.
+- **Pairing.** A one-time 6-digit PIN (rotates after use and after 5 wrong guesses) exchanges for a 256-bit
+  token in an `HttpOnly; SameSite=Strict` cookie. Token comparisons are constant-time. **Reset pairing**
+  issues a new token and drops all connections.
+- **Cross-site requests.** POSTs need the `X-Deck-Client` header (which forces a CORS preflight the server
+  never allows) and a matching `Origin` when present. Bodies are capped at 1 KB.
+- **Static files.** Only files inside the built web folder, with known types, are served. The config page is
+  not served on the network. The phone page gets a strict Content-Security-Policy.
+- **Validation both ways.** The host validates everything from the phone and from the helper; the phone
+  validates everything it receives (`parseMediaInfo`, `parseAudioInfo`, … — covers must be PNG/JPEG data URLs).
+- **OBS credentials** are read from OBS's own config on the PC and never leave it.
+- **Electron.** Sandboxed renderer, context isolation, no Node in the page, navigation and popups blocked,
+  IPC only from the config window with validated arguments.
 
-Plain http on the LAN is not encrypted; someone on the same Wi-Fi could observe traffic. Use it on a trusted home network.
+Plain http on the LAN is not encrypted; use it on a trusted home network.
 
-## Design system (CarPlay look)
+## Design system (Liquid Glass)
 
-Tokens (`tokens.css`) use the iOS system palette in Day and Night modes, the iOS type scale
-(13 / 15 / 17 / 22 / 34), Inter as a stand-in for SF Pro, 22.5 % icon corners and touch targets of 56 / 72 / 96 px.
-The phone is always in Night appearance; the config window follows the Windows light/dark setting.
+`Glass.module.css` defines the material every surface composes: a saturated backdrop blur, a bright
+specular edge on top, a soft inner stroke and a diagonal sheen, with an opaque fallback for browsers
+without `backdrop-filter`. Behind it, `Ambient` paints the wallpaper, tinted by the current album art.
 
-Components (`src/ui/design-system/`), each a pure props-in / callbacks-out component that maps to one Figma component:
+Tokens (`tokens.css`): iOS system colours in Day and Night, glass fills and strokes per mode, the iOS type
+scale (13 / 15 / 17 / 22 / 34), radii 12–32 px, touch targets of 52 / 68 / 88 px, spring easing.
+The phone is always Night; the config window follows the Windows light/dark setting.
 
-- **AppIcon** — rounded square with a gradient tint (blue, green, red, orange, purple, gray, graphite) and the app's own Windows icon on top; falls back to the first letter. Sizes sm 56 / md 72 / lg 88.
-- **AppTile** — AppIcon + label; launch states (pulse, success badge, failure badge + shake), selection ring, disabled.
-- **Dock / DockItem** — CarPlay sidebar: status header, icon-only items, footer button.
-- **PinPad** — iOS passcode keypad (72 px keys) so the system keyboard never covers the landscape screen.
-- **NavigationBar**, **Card**, **Button**, **IconButton**, **Icon** — iOS-style chrome for the config window.
+Components (each pure props-in / callbacks-out, one Figma component each):
+
+- **GlassPanel** — the material as a container.
+- **Rail / RailItem** — floating glass navigation rail; the active page gets its own drop of glass.
+- **GlassToggle** — Control Center–style square button; tinted glass for on / attention states.
+- **VolumeSlider** — tall glass capsule filled from the bottom; shows the finger's value while dragging.
+- **RingGauge**, **Sparkline** — load rings and one-minute charts.
+- **AppIcon / AppTile** — app icons with gradient tints and launch feedback.
+- **PinPad**, **Card**, **Button / IconButton**, **NavigationBar**, **Icon**, **Ambient**.
