@@ -1,16 +1,23 @@
 import { describe, expect, it } from 'vitest';
 import {
   deckClientReducer,
+  HISTORY_LENGTH,
   initialDeckClientState,
-  MAX_RECENT_BUTTONS,
-  recentButtons,
   type DeckClientAction,
-  type PublicDeckButton,
+  type SystemInfo,
 } from '../../src/core';
 
 const run = (...actions: DeckClientAction[]) => actions.reduce(deckClientReducer, initialDeckClientState);
-const button = (id: string): PublicDeckButton => ({ id, title: id, icon: null, tint: 'blue' });
 const start = (id: string): DeckClientAction => ({ type: 'launch/started', id });
+const sample = (cpuLoad: number, gpuLoad?: number): DeckClientAction => ({
+  type: 'system/received',
+  system: {
+    cpuLoad,
+    memoryUsedMb: 8000,
+    memoryTotalMb: 16000,
+    gpu: gpuLoad === undefined ? null : { name: 'GPU', load: gpuLoad, temperatureC: 50, memoryUsedMb: 1, memoryTotalMb: 2 },
+  } satisfies SystemInfo,
+});
 
 describe('launch feedback', () => {
   it('goes launching → done/failed → cleared', () => {
@@ -21,19 +28,6 @@ describe('launch feedback', () => {
   });
 });
 
-describe('recent buttons', () => {
-  it('puts new buttons on top, keeps existing slots and caps the list', () => {
-    expect(run(start('a'), start('b'), start('a')).recentIds).toEqual(['b', 'a']);
-    expect(run(start('a'), start('b'), start('c'), start('d')).recentIds).toEqual(['d', 'c', 'b']);
-    expect(run(start('a'), start('b'), start('c'), start('d')).recentIds).toHaveLength(MAX_RECENT_BUTTONS);
-  });
-
-  it('hides recents that were removed on the PC', () => {
-    const state = run(start('a'), start('gone'), { type: 'buttons/received', buttons: [button('a')] });
-    expect(recentButtons(state)).toEqual([button('a')]);
-  });
-});
-
 describe('pairing', () => {
   it('tracks submit, rejection and acceptance', () => {
     expect(run({ type: 'pairing/submitted' }).pairing).toBe(true);
@@ -41,5 +35,25 @@ describe('pairing', () => {
     expect(rejected).toMatchObject({ pairing: false, pairingFeedback: 'wrong-pin' });
     const accepted = run({ type: 'connection/changed', status: 'unpaired' }, { type: 'pairing/accepted' });
     expect(accepted).toMatchObject({ pairing: false, pairingFeedback: null, status: 'connecting' });
+  });
+});
+
+describe('PC state', () => {
+  it('keeps the latest system sample and a capped history for the charts', () => {
+    const many = Array.from({ length: HISTORY_LENGTH + 5 }, (_, i) => sample(i, i * 2));
+    const state = run(...many);
+    expect(state.system?.cpuLoad).toBe(HISTORY_LENGTH + 4);
+    expect(state.systemHistory.cpu).toHaveLength(HISTORY_LENGTH);
+    expect(state.systemHistory.cpu[0]).toBe(5);
+    expect(state.systemHistory.gpu.at(-1)).toBe((HISTORY_LENGTH + 4) * 2);
+  });
+
+  it('does not add GPU samples when there is no GPU', () => {
+    expect(run(sample(10), sample(20)).systemHistory).toEqual({ cpu: [10, 20], gpu: [], gpuTemp: [] });
+  });
+
+  it('stores when media arrived, for extrapolating the position', () => {
+    const media = { title: 'Song', artist: 'A', album: '', app: 'Spotify', isPlaying: true, positionSec: 10, durationSec: 100, artwork: null };
+    expect(run({ type: 'media/received', media, receivedAt: 1234 })).toMatchObject({ media, mediaReceivedAt: 1234 });
   });
 });
